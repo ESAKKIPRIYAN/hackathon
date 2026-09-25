@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ward Ledger — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <div class="seal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#C9A227" stroke-width="1.6"><path d="M12 2 3 7v2h18V7z"/><path d="M5 10v8M9 10v8M15 10v8M19 10v8"/><path d="M3 21h18"/></svg>
+    </div>
+    <div>
+      <h1><a href="index.html" style="color:inherit; text-decoration:none;">Ward Ledger</a></h1>
+      <div class="tagline">Participatory municipal budgeting</div>
+    </div>
+  </div>
+  <div class="mode-switch" role="tablist" aria-label="Switch view">
+    <a href="resident.html">Resident</a>
+    <span class="active">Admin</span>
+  </div>
+  <div class="session-chip" id="session-chip"></div>
+</header>
+
+<div class="sync-note" id="sync-note"></div>
+
+<main id="app"></main>
+
+<footer>Vote records are chained with SHA-256 hashes for tamper visibility. Data is shared with the Resident page via this browser's local storage.</footer>
+
+<script src="shared.js"></script>
+<script>
+let adminSession = null; // {adminId, name, role}
+
+function renderSessionChip(){
+  const el = document.getElementById('session-chip');
+  el.innerHTML = adminSession
+    ? `<span class="dot"></span> ${adminSession.name} · ${adminSession.role} <button onclick="adminLogout()">Sign out</button>`
+    : '';
+}
+function adminLogout(){ adminSession = null; render(); }
+
+/* ---- login ---- */
+function renderAdminLogin(){
+  return `
+  <div class="login-wrap">
+    <div class="login-card">
+      <h2>Municipal staff verification</h2>
+      <p class="sub">Enter your staff ID. We look it up on the municipal staff roll — only registered officials can post proposals or view results.</p>
+      <label for="in-adm">Staff ID</label>
+      <input type="text" id="in-adm" placeholder="e.g. MC-ADM-001" onkeydown="if(event.key==='Enter')adminLogin()">
+      <button class="btn-primary" onclick="adminLogin()">Verify &amp; enter</button>
+      <div id="admin-login-error"></div>
+      <div class="login-note">Try any ID from MC-ADM-001–MC-ADM-003. This is a simulated staff roll for demo purposes.</div>
+    </div>
+  </div>`;
+}
+
+function adminLogin(){
+  const adminId = document.getElementById('in-adm').value.trim().toUpperCase();
+  const errEl = document.getElementById('admin-login-error');
+  const record = ADMIN_ROLL[adminId];
+  if(!record){
+    errEl.innerHTML = `<div class="login-note" style="color:var(--danger); margin-top:-8px;">Staff ID not found on the municipal roll. Check the ID and try again.</div>`;
+    return;
+  }
+  adminSession = {adminId, name:record.name, role:record.role};
+  render();
+}
+
+/* ---- console ---- */
+function renderAdminConsole(){
+  const wardOptions = WARDS.map(w=>`<option value="${w}">${w}</option>`).join('');
+  const rows = proposals.map(p=>`
+    <tr>
+      <td>${p.name}<div style="color:var(--text-faint); font-size:0.74rem; margin-top:2px;">${p.desc}</div></td>
+      <td><span class="tag">${p.ward.split('—')[0].trim()}</span></td>
+      <td class="mono">${inr(p.budget)}</td>
+      <td class="mono">${votesFor(p.id)}</td>
+    </tr>`).join('');
+
+  return `
+  <section class="col-title">
+    <h2>Admin console</h2>
+    <span class="meta">Post proposals and monitor voting across all wards</span>
+  </section>
+  <div class="admin-grid">
+    <div class="panel">
+      <h3 style="font-size:0.95rem; margin-bottom:16px; color:var(--text-dim); font-family:'IBM Plex Sans'; font-weight:600;">New proposal</h3>
+      <label for="ad-name">Project name</label>
+      <input type="text" id="ad-name" placeholder="e.g. Community Library Roof Repair">
+      <label for="ad-desc">Description</label>
+      <textarea id="ad-desc" placeholder="What the project covers and why it matters"></textarea>
+      <div class="row2">
+        <div>
+          <label for="ad-budget">Budget estimate (₹)</label>
+          <input type="text" id="ad-budget" placeholder="e.g. 900000">
+        </div>
+        <div>
+          <label for="ad-ward">Ward</label>
+          <select id="ad-ward">${wardOptions}</select>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="handleAddProposal()">Post proposal</button>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h3 style="font-size:0.95rem; margin-bottom:14px; color:var(--text-dim); font-family:'IBM Plex Sans'; font-weight:600;">All proposals</h3>
+        <table class="prop-table">
+          <thead><tr><th>Proposal</th><th>Ward</th><th>Budget</th><th>Votes</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+
+      <section class="col-title" style="margin-top:24px;">
+        <h2 style="font-size:1.05rem;">Results by ward</h2>
+      </section>
+      ${WARDS.map(w=>`
+        <div class="panel" style="margin-bottom:18px;">
+          <div style="font-weight:600; margin-bottom:14px; font-family:'IBM Plex Sans'; font-size:0.9rem;">${w}</div>
+          ${renderResultsForWard(w)}
+        </div>`).join('')}
+
+      <div id="admin-ledger"></div>
+    </div>
+  </div>`;
+}
+
+function handleAddProposal(){
+  const name = document.getElementById('ad-name').value.trim();
+  const desc = document.getElementById('ad-desc').value.trim();
+  const budget = parseInt(document.getElementById('ad-budget').value.replace(/[^0-9]/g,''), 10);
+  const ward = document.getElementById('ad-ward').value;
+  if(!name || !desc || !budget){ alert('Fill in the project name, description and budget.'); return; }
+  addProposal(name, desc, budget, ward);
+  render();
+}
+
+/* ---- assemble page ---- */
+async function render(){
+  renderSessionChip();
+  document.getElementById('sync-note').innerHTML = renderSyncNote();
+  const app = document.getElementById('app');
+  if(!adminSession){ app.innerHTML = renderAdminLogin(); return; }
+  app.innerHTML = renderAdminConsole();
+  document.getElementById('admin-ledger').innerHTML = await renderLedgerPanel(null);
+}
+
+loadState();
+render();
+subscribeToUpdates(render);
+</script>
+</body>
+</html>
