@@ -10,7 +10,6 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-
 <header class="top">
   <div class="brand">
     <div class="seal">
@@ -27,111 +26,81 @@
   </div>
   <div class="session-chip" id="session-chip"></div>
 </header>
-
 <div class="sync-note" id="sync-note"></div>
-
 <main id="app"></main>
-
 <footer>Vote records are chained with SHA-256 hashes for tamper visibility. Data is shared with the Admin page via this browser's local storage.</footer>
 
+<!-- Supabase and Shared JS Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="shared.js"></script>
+
 <script>
-let session = null;        // {name, voterId, ward}
+let session = null;
 let selectedWard = WARDS[0];
 
 function renderSessionChip(){
   const el = document.getElementById('session-chip');
   el.innerHTML = session
-    ? `<span class="dot"></span> ${session.name} · ${session.ward.split('—')[0].trim()} <button onclick="logout()">Sign out</button>`
-    : '';
+    ? <span class="dot"></span> ${session.name} · ${session.ward.split('—')[0].trim()} <button onclick="logout()">Sign out</button> : '';
 }
+
 function logout(){ session = null; render(); }
 
-/* ---- login ---- */
 function renderResidentLogin(){
   return `
   <div class="login-wrap">
     <div class="login-card">
       <h2>Verify your residency</h2>
-      <p class="sub">Enter your voter ID. We look it up on the ward electoral roll — your name and ward are confirmed automatically, not selected by you.</p>
-      <label for="in-vid">Voter ID</label>
+      <label>Voter ID</label>
       <input type="text" id="in-vid" placeholder="e.g. TN-0119284" onkeydown="if(event.key==='Enter')residentLogin()">
       <button class="btn-primary" onclick="residentLogin()">Verify &amp; enter</button>
       <div id="login-error"></div>
-      <div class="login-note">One vote per verified voter ID, locked to the ward you're registered in. Try any ID from TN-0119284–TN-0448831. This is a simulated roll for demo purposes.</div>
     </div>
   </div>`;
 }
 
 function residentLogin(){
   const voterId = document.getElementById('in-vid').value.trim().toUpperCase();
-  const errEl = document.getElementById('login-error');
   const record = VOTER_ROLL[voterId];
   if(!record){
-    errEl.innerHTML = `<div class="login-note" style="color:var(--danger); margin-top:-8px;">Voter ID not found on any ward's electoral roll. Check the ID and try again.</div>`;
+    document.getElementById('login-error').innerHTML = <div class="login-note" style="color:var(--danger);">ID not found.</div>;
     return;
-  }
-  if(votedVoters.has(voterId)){
-    errEl.innerHTML = `<div class="login-note" style="color:var(--gold-soft); margin-top:-8px;">This voter ID has already cast its vote. Signing in for viewing only.</div>`;
   }
   session = {name:record.name, voterId, ward:record.ward};
   selectedWard = record.ward;
   render();
 }
 
-/* ---- ward rail + ballots ---- */
 function renderWardRail(){
-  return `
-  <div class="ward-rail">
-    <div class="rail-label">Wards</div>
-    ${WARDS.map(w=>`
-      <button class="ward-btn ${w===selectedWard?'active':''}" onclick="selectWard('${w.replace(/'/g,"\\'")}')">
-        <span>${w}</span>
-        ${session && w===session.ward ? '<span class="home-tag">YOUR WARD</span>' : ''}
-      </button>`).join('')}
+  return `<div class="ward-rail">
+    ${WARDS.map(w=><button class="ward-btn ${w===selectedWard?'active':''}" onclick="selectWard('${w}')"><span>${w}</span></button>).join('')}
   </div>`;
 }
+
 function selectWard(w){ selectedWard = w; render(); }
 
 function renderBallots(){
   const list = proposalsByWard(selectedWard);
-  const isMyWard = session && selectedWard === session.ward;
-  const alreadyVoted = session && votedVoters.has(session.voterId);
-  if(list.length===0) return `<div class="empty">No proposals posted for this ward yet.</div>`;
+  if(list.length===0) return <div class="empty">No proposals posted.</div>;
+  
   return list.map(p=>{
     const votes = votesFor(p.id);
-    let btn;
-    if(!isMyWard){
-      btn = `<button class="vote-btn" disabled>Outside your ward</button>`;
-    } else if(alreadyVoted){
-      const myVote = voteLog.find(v=>v.voterId===session.voterId && v.proposalId===p.id);
-      btn = myVote ? `<button class="vote-btn voted" disabled>✓ Your vote</button>` : `<button class="vote-btn" disabled>Vote cast</button>`;
-    } else {
-      btn = `<button class="vote-btn" onclick="handleVote(${p.id})">Cast vote</button>`;
+    let btn = <button class="vote-btn" onclick="handleVote(${p.id})">Cast vote</button>;
+    
+    if(session && selectedWard !== session.ward) {
+      btn = <button class="vote-btn" disabled>Outside ward</button>;
+    } else if(session && votedVoters.has(session.voterId)) {
+      btn = <button class="vote-btn voted" disabled>Vote cast</button>;
     }
-    return `
-    <div class="ballot">
-      <div class="info">
-        <h3>${p.name}</h3>
-        <p>${p.desc}</p>
-        <div class="figures">
-          <div><b>${inr(p.budget)}</b><span>Estimated budget</span></div>
-        </div>
-      </div>
-      <div class="vote-col">
-        ${btn}
-        <div class="vote-count">${votes} vote${votes===1?'':'s'}</div>
-      </div>
-    </div>`;
+    
+    return <div class="ballot"><div class="info"><h3>${p.name}</h3><p>${p.desc}</p><b>${inr(p.budget)}</b></div><div class="vote-col">${btn}</div></div>;
   }).join('');
 }
 
-async function handleVote(proposalId){
-  await castVote(proposalId, session);
-  render();
+async function handleVote(proposalId){ 
+  await castVote(proposalId, session); 
 }
 
-/* ---- assemble page ---- */
 function render(){
   renderSessionChip();
   document.getElementById('sync-note').innerHTML = renderSyncNote();
@@ -141,23 +110,19 @@ function render(){
   <div class="grid">
     ${renderWardRail()}
     <div>
-      <section class="col-title">
-        <h2>${selectedWard}</h2>
-        <span class="meta">${proposalsByWard(selectedWard).length} proposal${proposalsByWard(selectedWard).length===1?'':'s'}</span>
-      </section>
+      <section class="col-title"><h2>${selectedWard}</h2></section>
       ${renderBallots()}
-      <section class="col-title" style="margin-top:28px;">
-        <h2>Live results</h2>
-        <span class="meta">Updates as votes are cast</span>
-      </section>
+      <section class="col-title" style="margin-top:28px;"><h2>Live results</h2></section>
       ${renderResultsForWard(selectedWard)}
     </div>
   </div>`;
 }
 
-loadState();
-render();
-subscribeToUpdates(render);
+// Start app by loading database state first
+loadState().then(() => {
+  render();
+  subscribeToUpdates(render);
+});
 </script>
 </body>
 </html>
