@@ -1,7 +1,7 @@
 /* ===== Ward Ledger — Supabase Connected shared.js ===== */
 
-const SUPABASE_URL = 'YOUR_PROJECT_URL_HERE';
-const SUPABASE_KEY = 'YOUR_ANON_PUBLIC_KEY_HERE';
+const SUPABASE_URL = 'https://fyyxtamoijkmhxtbwqiu.supabase.co/rest/v1/';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5eXh0YW1vaWprbWh4dGJ3cWl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAzNDQwMTgsImV4cCI6MjEwNTkyMDAxOH0.NFEtYfFZ81UWBCD76Gn_jl68dfXfiuj7nLVIrF0i9pg';
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const WARDS = ["Ward 1 — Anna Nagar", "Ward 2 — T Nagar", "Ward 3 — Adyar", "Ward 4 — Mylapore"];
